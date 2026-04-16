@@ -1,0 +1,12 @@
+# Ignore the heavy library folders
+node_modules/
+Frontend/node_modules/
+Backend/node_modules/
+
+# Ignore your secrets
+.env
+Backend/.env
+
+# Ignore build files
+dist/
+build/
