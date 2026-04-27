@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react"; // Added useCallback
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import {
   LineChart,
@@ -21,33 +21,25 @@ export default function App() {
   const [aiSuggestion, setAiSuggestion] = useState(
     "AI Advisor is analyzing your hardware...",
   );
+  const [showHighRiskPopup, setShowHighRiskPopup] = useState(false);
 
   const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-  // 🚀 ML INTEGRATION: Improved threshold logic
-  // 🚀 ML INTEGRATION: Fixed array mapping for Random Forest Classifier
   const getMlRisk = (cpu, memory, pCount) => {
     try {
-      // 1. Get the array of votes from the model: [LowVotes, MedVotes, HighVotes]
       const classScores = score([cpu, memory, pCount]);
-
-      // 2. Find the highest vote number in the array
       const maxScore = Math.max(...classScores);
-
-      // 3. Find which index (0, 1, or 2) had that highest vote
       const winningClassIndex = classScores.indexOf(maxScore);
 
-      // 4. Map the winning index to the text
       if (winningClassIndex === 2) return "HIGH";
       if (winningClassIndex === 1) return "MEDIUM";
       return "LOW";
     } catch (err) {
       console.error("ML Score Error:", err);
-      return "LOW"; // Fallback
+      return "LOW"; 
     }
   };
 
-  // 🤖 GEN AI INTEGRATION: Wrapped in useCallback to prevent unnecessary re-renders
   const fetchGenAiAdvice = useCallback(
     async (cpu, mem, pCount, risk) => {
       try {
@@ -70,7 +62,6 @@ export default function App() {
       const res = await axios.get(`${BASE_URL}/api/metrics`);
       const data = res.data;
 
-      // Clean the incoming data
       const cpu = Math.round(Number(data.cpu)) || 0;
       const memory = Math.round(Number(data.memory)) || 0;
       const disk = Math.round(Number(data.disk)) || 0;
@@ -98,7 +89,6 @@ export default function App() {
 
       setMetrics(safeData);
 
-      // 📈 HISTORY MANAGEMENT: Limits history to 30 points for performance
       setHistory((prev) => {
         const newPoint = {
           time: new Date().toLocaleTimeString([], {
@@ -119,7 +109,6 @@ export default function App() {
     }
   };
 
-  // 🤖 Trigger GenAI only when Risk changes
   useEffect(() => {
     if (metrics?.risk) {
       fetchGenAiAdvice(
@@ -132,16 +121,24 @@ export default function App() {
   }, [metrics?.risk, fetchGenAiAdvice]);
 
   useEffect(() => {
-    fetchData(); // Initial fetch
+    if (metrics?.risk === "HIGH") {
+      setShowHighRiskPopup(true);
+    } else {
+      setShowHighRiskPopup(false);
+    }
+  }, [metrics?.risk]);
+
+  useEffect(() => {
+    fetchData(); 
     const interval = setInterval(fetchData, 2000);
     return () => clearInterval(interval);
   }, []);
 
   if (!metrics) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
+      <div className="h-screen flex flex-col items-center justify-center bg-[#0f172a] text-slate-200">
         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-xl font-semibold text-gray-600">
+        <p className="text-xl font-semibold">
           Connecting to Hardware Telemetry...
         </p>
       </div>
@@ -149,124 +146,183 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans">
-      {/* HEADER */}
-      <div className="bg-white shadow-sm border border-gray-200 rounded-2xl p-6 flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            System Load Dashboard 🚀
-          </h1>
-          <p className="text-gray-500 text-sm">
-            Target: Dell G15 Ryzen Edition
-          </p>
+    <div className="flex h-screen bg-[#0f172a] text-slate-200 font-sans overflow-hidden relative">
+      
+      {/* HIGH RISK POPUP MODAL */}
+      {showHighRiskPopup && metrics?.risk === "HIGH" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-300">
+          <div className="bg-[#1e293b] border-2 border-red-500 rounded-2xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.4)] max-w-lg w-full mx-4 transform transition-all scale-100">
+            <div className="flex items-center gap-3 mb-5 text-red-500">
+              <span className="text-4xl animate-pulse">⚠️</span>
+              <h2 className="text-2xl font-extrabold tracking-widest uppercase">Critical Load</h2>
+            </div>
+            <div className="bg-[#0f172a] p-5 rounded-xl border border-red-500/30 mb-6">
+              <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-2">AI Suggested Action</p>
+              <p className="text-slate-200 text-lg leading-relaxed font-medium">{aiSuggestion}</p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowHighRiskPopup(false)}
+                className="px-6 py-2.5 bg-red-500/20 hover:bg-red-500/40 text-red-400 border border-red-500 rounded-lg font-bold tracking-wide transition-colors"
+              >
+                Acknowledge & Close
+              </button>
+            </div>
+          </div>
         </div>
+      )}
 
-        <div
-          className={`px-6 py-2 rounded-full font-bold border-2 transition-all duration-500 ${
-            metrics.risk === "HIGH"
-              ? "bg-red-50 border-red-200 text-red-600 scale-105"
-              : metrics.risk === "MEDIUM"
-                ? "bg-yellow-50 border-yellow-200 text-yellow-600"
-                : "bg-green-50 border-green-200 text-green-600"
-          }`}
-        >
-          AI STATUS: {metrics.risk}
+      {/* SIDEBAR */}
+      <div className="w-64 bg-[#1e293b] border-r border-slate-700 flex flex-col hidden md:flex">
+        <div className="p-6 border-b border-slate-700 flex items-center gap-3">
+          <span className="text-2xl">🧠</span>
+          <h2 className="font-bold text-lg tracking-wide text-white">IDSS Core</h2>
+        </div>
+        <nav className="flex-1 p-4 space-y-2">
+          <a href="#" className="block px-4 py-3 bg-blue-600/20 text-blue-400 rounded-xl font-medium border border-blue-500/30">📊 Dashboard</a>
+          <a href="#" className="block px-4 py-3 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded-xl transition-colors">⚡ System Status</a>
+          <a href="#" className="block px-4 py-3 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded-xl transition-colors">📈 Analytics</a>
+          <a href="#" className="block px-4 py-3 text-slate-400 hover:bg-slate-800 hover:text-slate-200 rounded-xl transition-colors">⚙️ Settings</a>
+        </nav>
+        <div className="p-4 border-t border-slate-700">
+          <button className="w-full py-2 px-4 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">
+            📥 Export Report
+          </button>
         </div>
       </div>
 
-      {/* METRIC CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <Metric label="CPU" value={metrics.cpu} color="blue" />
-        <Metric label="Memory" value={metrics.memory} color="purple" />
-        <Metric label="Disk" value={metrics.disk} color="emerald" />
-        <Metric label="Virtual Mem" value={metrics.vMem} color="orange" />
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-          <p className="text-gray-500 font-medium mb-1 text-sm">
-            Active Processes
-          </p>
-          <p className="text-3xl font-bold text-gray-800">{metrics.pCount}</p>
-          <p className="text-xs text-gray-400 mt-2">
-            I/O Queue: {metrics.dQueue}
-          </p>
-        </div>
-      </div>
+      {/* MAIN CONTENT */}
+      <div className="flex-1 overflow-y-auto p-6 md:p-8">
+        {/* HEADER */}
+        <div className="bg-[#1e293b] shadow-lg border border-slate-700 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">
+              System Load Dashboard 🚀
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Target: Lenovo IdeaPad 3
+            </p>
+          </div>
 
-      {/* 🤖 INTELLIGENT DECISION SUPPORT */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-lg">🧠</span>
-          <h2 className="font-bold text-gray-700 text-lg">
-            Intelligent Decision Support
-          </h2>
-        </div>
-        <div
-          className={`p-4 rounded-xl border-l-4 transition-all duration-700 ${
-            metrics.risk === "HIGH"
-              ? "bg-red-50 text-red-800 border-red-500"
-              : metrics.risk === "MEDIUM"
-                ? "bg-yellow-50 text-yellow-800 border-yellow-500"
-                : "bg-blue-50 text-blue-800 border-blue-500"
-          }`}
-        >
-          <p className="text-sm opacity-80 mb-1 font-semibold uppercase tracking-wider">
-            AI RECOMMENDATION
-          </p>
-          <p className="text-lg leading-relaxed">{aiSuggestion}</p>
-        </div>
-      </div>
-
-      {/* VISUALIZATIONS */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-          <h2 className="font-bold text-gray-700 mb-4">
-            Live Performance Trends
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={history}>
-              <XAxis dataKey="time" hide />
-              <YAxis domain={[0, 100]} />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="cpu"
-                stroke="#3b82f6"
-                strokeWidth={3}
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="memory"
-                stroke="#8b5cf6"
-                strokeWidth={3}
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="vMem"
-                stroke="#f97316"
-                strokeWidth={3}
-                dot={false}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <div
+            className={`px-6 py-2 rounded-full font-bold border-2 shadow-lg transition-all duration-500 ${
+              metrics.risk === "HIGH"
+                ? "bg-red-500/10 border-red-500 text-red-400 animate-pulse"
+                : metrics.risk === "MEDIUM"
+                  ? "bg-yellow-500/10 border-yellow-500 text-yellow-400"
+                  : "bg-emerald-500/10 border-emerald-500 text-emerald-400"
+            }`}
+          >
+            AI STATUS: {metrics.risk}
+          </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-          <h2 className="font-bold text-gray-700 mb-4">
-            Resource Distribution
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={metrics.processes}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" />
-              <YAxis domain={[0, 100]} />
-              <Tooltip cursor={{ fill: "transparent" }} />
-              <Bar dataKey="value" fill="#3b82f6" radius={[10, 10, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        {/* METRIC CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+          <Metric label="CPU" value={metrics.cpu} color="blue" />
+          <Metric label="Memory" value={metrics.memory} color="purple" />
+          <Metric label="Disk" value={metrics.disk} color="emerald" />
+          <Metric label="Virtual Mem" value={metrics.vMem} color="orange" />
+          <div className="bg-[#1e293b] p-6 rounded-2xl shadow-lg border border-slate-700 flex flex-col justify-center">
+            <p className="text-slate-400 font-medium mb-1 text-sm uppercase tracking-wider">
+              Active Processes
+            </p>
+            <p className="text-4xl font-bold text-white">{metrics.pCount}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+              <p className="text-xs text-slate-500">
+                I/O Queue: {metrics.dQueue}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 🤖 INTELLIGENT DECISION SUPPORT */}
+        <div className="bg-[#1e293b] p-6 rounded-2xl shadow-lg border border-slate-700 mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl">🧠</span>
+            <h2 className="font-bold text-white text-xl">
+              Intelligent Decision Support
+            </h2>
+          </div>
+          <div
+            className={`p-5 rounded-xl border-l-4 bg-[#0f172a] shadow-inner transition-all duration-700 ${
+              metrics.risk === "HIGH"
+                ? "border-red-500"
+                : metrics.risk === "MEDIUM"
+                  ? "border-yellow-500"
+                  : "border-blue-500"
+            }`}
+          >
+            <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${
+               metrics.risk === "HIGH" ? "text-red-400" : metrics.risk === "MEDIUM" ? "text-yellow-400" : "text-blue-400"
+            }`}>
+              AI Recommendation
+            </p>
+            <p className="text-lg leading-relaxed text-slate-300">{aiSuggestion}</p>
+          </div>
+        </div>
+
+        {/* VISUALIZATIONS */}
+        <div className="grid lg:grid-cols-2 gap-8">
+          <div className="bg-[#1e293b] p-6 rounded-2xl shadow-lg border border-slate-700">
+            <h2 className="font-bold text-white mb-6 text-lg tracking-wide">
+              Live Performance Trends
+            </h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={history}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                <XAxis dataKey="time" hide />
+                <YAxis domain={[0, 100]} stroke="#64748b" tick={{fill: '#94a3b8'}} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#f1f5f9' }}
+                  itemStyle={{ color: '#f1f5f9' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="cpu"
+                  stroke="#3b82f6"
+                  strokeWidth={3}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="memory"
+                  stroke="#a855f7"
+                  strokeWidth={3}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="vMem"
+                  stroke="#f97316"
+                  strokeWidth={3}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="bg-[#1e293b] p-6 rounded-2xl shadow-lg border border-slate-700">
+            <h2 className="font-bold text-white mb-6 text-lg tracking-wide">
+              Resource Distribution
+            </h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={metrics.processes}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                <XAxis dataKey="name" stroke="#64748b" tick={{fill: '#94a3b8'}} />
+                <YAxis domain={[0, 100]} stroke="#64748b" tick={{fill: '#94a3b8'}} />
+                <Tooltip 
+                  cursor={{ fill: "#334155", opacity: 0.4 }}
+                  contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#f1f5f9' }}
+                />
+                <Bar dataKey="value" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
     </div>
@@ -275,21 +331,21 @@ export default function App() {
 
 function Metric({ label, value, color }) {
   const colorMap = {
-    blue: "bg-blue-500",
-    purple: "bg-purple-500",
-    emerald: "bg-emerald-500",
-    orange: "bg-orange-500",
+    blue: "bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]",
+    purple: "bg-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)]",
+    emerald: "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]",
+    orange: "bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]",
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-      <div className="flex justify-between items-end mb-4">
-        <span className="text-gray-500 font-medium">{label}</span>
-        <span className="text-2xl font-bold">{value}%</span>
+    <div className="bg-[#1e293b] p-6 rounded-2xl shadow-lg border border-slate-700 flex flex-col justify-between">
+      <div className="flex justify-between items-start mb-6">
+        <span className="text-slate-400 font-medium uppercase tracking-wider text-sm">{label}</span>
+        <span className="text-3xl font-bold text-white">{value}%</span>
       </div>
-      <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
+      <div className="w-full bg-[#0f172a] h-2.5 rounded-full overflow-hidden border border-slate-800">
         <div
-          className={`h-full transition-all duration-700 ${colorMap[color] || "bg-blue-500"}`}
+          className={`h-full transition-all duration-700 rounded-full ${colorMap[color] || "bg-blue-500"}`}
           style={{ width: `${value}%` }}
         />
       </div>
