@@ -25,11 +25,21 @@ export default function App() {
   const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
   // 🚀 ML INTEGRATION: Improved threshold logic
+  // 🚀 ML INTEGRATION: Fixed array mapping for Random Forest Classifier
   const getMlRisk = (cpu, memory, pCount) => {
     try {
-      const prediction = score([cpu, memory, pCount]);
-      if (prediction >= 1.5) return "HIGH";
-      if (prediction >= 0.5) return "MEDIUM";
+      // 1. Get the array of votes from the model: [LowVotes, MedVotes, HighVotes]
+      const classScores = score([cpu, memory, pCount]);
+
+      // 2. Find the highest vote number in the array
+      const maxScore = Math.max(...classScores);
+
+      // 3. Find which index (0, 1, or 2) had that highest vote
+      const winningClassIndex = classScores.indexOf(maxScore);
+
+      // 4. Map the winning index to the text
+      if (winningClassIndex === 2) return "HIGH";
+      if (winningClassIndex === 1) return "MEDIUM";
       return "LOW";
     } catch (err) {
       console.error("ML Score Error:", err);
